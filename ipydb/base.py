@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from contextlib import _GeneratorContextManager
 from typing import Any, Callable, List, Type
 
 
@@ -9,10 +10,19 @@ def _delattrs(obj):
 
 
 class BaseTable(ABC):
-    def __init__(self, table: str, schema: str, global_vars: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        table: str,
+        schema: str,
+        global_vars: dict[str, Any],
+        connection_fn: Callable,
+        connection_kwargs: Any,
+    ) -> None:
         self.table = table
         self.schema = schema
         self.global_vars = global_vars
+        self._connection_fn = connection_fn
+        self._connection_kwargs = connection_kwargs
 
         self.schema_table = f"{self.schema}.{self.table}"
         self.schema_table_copy = f"{self.schema_table}_copy"
@@ -30,16 +40,34 @@ class BaseTable(ABC):
 class BaseSchema(ABC):
     _table_cls: Type[BaseTable]
 
-    def __init__(self, schema: str, global_vars: dict[str, Any]) -> None:
+    def __init__(
+        self,
+        schema: str,
+        global_vars: dict[str, Any],
+        connection_fn: Callable,
+        connection_kwargs: Any,
+    ) -> None:
         self._schema = schema
         self._global_vars = global_vars
+        self._connection_fn = connection_fn
+        self._connection_kwargs = connection_kwargs
         self._refresh()
 
     @abstractmethod
     def _list_tables(self) -> List[str]: ...
 
     def _add_table_attr(self, table: str):
-        setattr(self, table, self._table_cls(table, self._schema, self._global_vars))
+        setattr(
+            self,
+            table,
+            self._table_cls(
+                table,
+                self._schema,
+                self._global_vars,
+                self._connection_fn,
+                self._connection_kwargs,
+            ),
+        )
 
     def _refresh(self):
         _delattrs(self)
@@ -53,10 +81,12 @@ class BaseDatabase(ABC):
 
     def __init__(
         self,
-        connection_generator: Callable,
         global_vars: dict[str, Any],
+        connection_fn: Callable,
+        **connection_kwargs: Any,
     ) -> None:
-        self._connection_generator = connection_generator
+        self._connection_fn = connection_fn
+        self._connection_kwargs = connection_kwargs
         self._global_vars = global_vars
         self._refresh()
 
@@ -64,10 +94,20 @@ class BaseDatabase(ABC):
     def _list_schemas(self) -> List[str]: ...
 
     def _add_schema_attr(self, schema: str):
-        setattr(self, schema, self._schema_cls(schema, self._global_vars))
+        setattr(
+            self,
+            schema,
+            self._schema_cls(
+                schema,
+                self._global_vars,
+                self._connection_fn,
+                self._connection_kwargs,
+            ),
+        )
 
     def _refresh(self):
         _delattrs(self)
         self._schemas = self._list_schemas()
         for s in self._schemas:
+            print(f"Scanning {s}")
             self._add_schema_attr(s)
