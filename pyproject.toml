@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "ipydata"
-version = "0.1.2"
+version = "0.1.4"
 description = "Simple interactive database and blob storage operations in python."
 readme = "README.md"
 requires-python = ">=3.12"
